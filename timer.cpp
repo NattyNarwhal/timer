@@ -15,38 +15,31 @@ void ul2ft(PULARGE_INTEGER ul, LPFILETIME ft)
 	ft->dwHighDateTime = ul->HighPart;
 }
 
-char *stime2str(LPSYSTEMTIME st)
+char *ftime2str(LPFILETIME ft)
 {
-	// XXX: This is likely extremely imprecise and breaks past days
-	// XXX: also very bad strcats
 	char str[1024], tmp[128];
 	ZeroMemory(str, 1024);
 	ZeroMemory(tmp, 128);
-	if (st->wDay - 1) {
-		// SYSTEMTIMEs default at 1
-		sprintf(tmp, "%dd", st->wDay - 1);
-		strcat(str, tmp);
+	unsigned _int64 ns, min, sec, remNs;
+	ULARGE_INTEGER ulNs;
+	ft2ul(ft, &ulNs);
+	// each tick is 100ns
+	ns = ulNs.QuadPart * 100;
+	sec = ns / 1000000000; // 1,000,000,000;
+	min = sec / 60;
+	sec %= 60;
+	remNs = ns % 1000000000;
+	if (min) {
+		sprintf(str, "%I64um", min);
 	}
-	if (st->wMinute) {
-		sprintf(tmp, "%dm", st->wMinute);
-		strcat(str, tmp);
+	if (remNs) {
+		// unix time programs divide ns remainder by this; seems right
+		sprintf(tmp, "%I64u.%I64us", sec, remNs / 10000000);
+	} else {
+		sprintf(tmp, "%I64us", sec);
 	}
-	// always print seconds, but maybe not ms
-	sprintf(tmp, "%d", st->wSecond);
 	strcat(str, tmp);
-	if (st->wMilliseconds) {
-		sprintf(tmp, ".%d", st->wMilliseconds);
-		strcat(str, tmp);
-	}
-	strcat(str, "s");
 	return strdup(str);
-}
-
-char *ftime2str(LPFILETIME ft)
-{
-	SYSTEMTIME st;
-	FileTimeToSystemTime(ft, &st);
-	return stime2str(&st);
 }
 
 TCHAR *tcscomb(int argc, TCHAR *argv[])
@@ -70,10 +63,12 @@ int _tmain(int argc, TCHAR *argv[])
 	FILETIME beforeCreate, creation, ending, real, kernel, user;
 	ULARGE_INTEGER ulCreate, ulEnd, ulReal;
 
+#if NDEBUG
 	if (argc < 2) {
 		fputs("you must specify a command line\n", stderr);
 		return 1;
 	}
+#endif
 
 	combinedArgv = tcscomb(argc - 1, argv + 1);
 	ZeroMemory(&sinfo, sizeof(sinfo));
